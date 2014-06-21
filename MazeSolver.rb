@@ -122,115 +122,46 @@ class MazeSolver
 
 	# Changes the target position depending on what is surrounding it.
 	def move_position_recursively(line, position, last_move = "")
+		if check_current_position_is_not_wall(line, position) == false
+			puts "Something bad has happened. The current position is a wall."
+			return false
+		end
+
 		surrounding_squares = inspect_surrounding_positions(line, position)
 		movement = ""
 
 		puts "Before moving: #{line}"
 		puts "Before moving: #{position}"
 
-		@last_move_array.push(last_move)
+		movement_useless = Array.new
 
-		puts surrounding_squares
-		puts "Last move = " + last_move
+		# Changing the pattern of movement to remember every space that is encountered and return there if we have an issue
+		if @unbounded_spaces.include?([line, position]) == false and @exhausted_unbounded_spaces.include?([line, position]) == false
+			@unbounded_spaces.push([line, position])
+		end
 
-		left = surrounding_squares["left"]
-		right = surrounding_squares["right"]
-		up = surrounding_squares["top"]
-		down = surrounding_squares["bottom"]
-
-		movement_already_made = Array.new
+		decide_possible_moves(line, position, surrounding_squares)
 
 		if @hash_space_to_movement != nil
 			if @hash_space_to_movement.has_key?([line, position])
-				movement_already_made = @hash_space_to_movement.fetch([line, position])
+				movement_useless = @hash_space_to_movement.fetch([line, position])
 			end
 		end
 
-		# Pattern of movement
-		if left == "#" and down != "#" and movement_already_made.include?("down") == false and (last_move != "up" or (right == "#" and up == "#"))
-			movement = "down"
-		elsif left == "#" and right != "#" and movement_already_made.include?("right") == false and last_move != "left"
-			movement = "right"
-		elsif left == "#" and up != "#" and movement_already_made.include?("up") == false and last_move != "down"
-			movement = "up"
-		elsif right == "#" and up != "#" and movement_already_made.include?("up") == false and last_move != "down"
-			movement = "up"
-		elsif right == "#" and left != "#" and movement_already_made.include?("left") == false and last_move != "right"
+		#THisis where the movement is decided
+		if movement_useless.include?("left") == false
 			movement = "left"
-		elsif right == "#" and down != "#" and movement_already_made.include?("down") == false and last_move != "up"
+		elsif movement_useless.include?("up") == false
+			movement = "up"
+		elsif movement_useless.include?("right") == false
+			movement = "right"
+		elsif movement_useless.include?("down") == false
 			movement = "down"
-		elsif (up == "#" or down == "#") and right != "#" and left != "#"
-			puts "Using this option"
-			if last_move == ""
-				movement = "left"
-			else
-				if up == "#"
-					if last_move != "up"
-						movement = last_move
-					else
-						last_horizontal_move = ""
-						last_move_reversed_array = @last_move_array.reverse
-						for i in last_move_reversed_array
-							if i == "right"
-								movement = "right"
-								break
-							elsif i == "left"
-								movement = "left"
-							end
-						end
-
-						if movement == ""
-							movement = "down"
-						end
-					end
-				elsif down == "#"
-					if last_move != "down"
-						movement = last_move
-					else
-						last_horizontal_move = ""
-						last_move_reversed_array = @last_move_array.reverse
-						for i in last_move_reversed_array
-							if i == "right"
-								movement = "right"
-								break
-							elsif i == "left"
-								movement = "left"
-							end
-						end
-
-						if movement == ""
-							movement = "up"
-						end
-					end
-				end
-
-			end
-
-		# Spaces without any barriers surrounding them
-		elsif down != "#" and up != "#" and left != "#" and right != "#"
-			
-			# If we encounter any of these spaces then we want to be able to return them and see if we can make a different decision
-			if @unbounded_spaces.include?([line, position]) == false and @exhausted_unbounded_spaces.include?([line, position]) == false
-				@unbounded_spaces.push([line, position])
-			end
-
-			if movement_already_made.include?("left") == false
-				movement = "left"
-			elsif movement_already_made.include?("right") == false
-				movement = "right"
-			elsif movement_already_made.include?("up") == false
-				movement = "up"
-			elsif movement_already_made.include?("down") == false
-
-				# Delete the space if we get to this point as we are no longer interested in it.
-				@unbounded_spaces.delete([line, position])
-				@exhausted_unbounded_spaces.push([line, position])
-
-				movement = "down"
-			else
-				return false
-			end			
 		else
+			# Delete the space if we get to this point as we are no longer interested in it.
+			@unbounded_spaces.delete([line, position])
+			@exhausted_unbounded_spaces.push([line, position])
+
 			for i in @unbounded_spaces
 				# Get the line and position out of the array and return a square where we can make any decision
 				line = i.fetch(0)
@@ -242,23 +173,15 @@ class MazeSolver
 				if move_position_recursively(line, position)
 					return true
 				end
+
+				return false
 			end
+		end		
 
-			# declare maze unsolvable if we haven't done already
-			if @already_declared_unsolvable == false
-				@already_declared_unsolvable = true
-				puts "This maze is unsolvable"
-			end
-
-			# Return false if we can't move anywhere
-			return false
-		end
-
+		# Record the movement that has been made against the space
 		add_movement_to_space(line, position, movement)
 
-		puts movement
-
-		# Adjust line and position values
+		# Adjust line and position values depending on movement
 		if movement == "right"
 			position = position + 1
 		elsif movement == "left"
@@ -272,6 +195,7 @@ class MazeSolver
 		puts "After moving: #{line}" 
 		puts "After moving: #{position}"
 
+		# Check if the maze has been solved
 		if check_if_we_have_won(line, position)
 			@maze_solved = true
 			return true
@@ -280,6 +204,34 @@ class MazeSolver
 		# Return true if we are able to move again
 		if move_position_recursively(line, position, movement)
 			return true
+		end
+	end
+
+	def decide_possible_moves(line, position, surrounding_squares)
+		if (@hash_space_to_movement == nil or !@hash_space_to_movement.has_key?([line, position]))
+			left = surrounding_squares["left"]
+			right = surrounding_squares["right"]
+			up = surrounding_squares["top"]
+			down = surrounding_squares["bottom"]
+
+			puts "Initialising moves that are possible"
+
+			if left == "#"
+				add_movement_to_space(line, position, "left")
+				puts "can't move left"
+			end
+			if right == "#"
+				add_movement_to_space(line, position, "right")
+				puts "can't move right"
+			end
+			if up == "#"
+				add_movement_to_space(line, position, "up")
+				puts "can't move up"
+			end
+			if down == "#"
+				add_movement_to_space(line, position, "down")
+				puts "can't move down"
+			end
 		end
 	end
 
@@ -345,6 +297,19 @@ class MazeSolver
 		surrounding_squares = { "left" => left_position, "right" => right_position, "top" => top_position, "bottom" => bottom_position}		
 
 		return surrounding_squares
+	end
+
+	def check_current_position_is_not_wall (line, position)
+		current_line = @maze_lines.fetch(line)
+		current_line_arr = current_line.chars.to_a
+
+		current_position = current_line_arr.fetch(position)
+
+		if current_position == "#"
+			return false
+		end
+
+		return true
 	end
 end
 
